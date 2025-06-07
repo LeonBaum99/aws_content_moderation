@@ -1,0 +1,38 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+*.swp
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Jupyter/IPython (if ever used in future)
+.ipynb_checkpoints/
+
+# VSCode/JetBrains/other editors (if you use them)
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Homebrew metadata (if present)
+.brew/
+
+# LocalStack temp
+localstack_tmp/
