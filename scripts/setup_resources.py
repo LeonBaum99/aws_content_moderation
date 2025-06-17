@@ -2,55 +2,47 @@
 """
 scripts/setup_resources.py
 
-This script creates all required AWS resources in a LocalStack environment:
-- SSM parameters for configuration
-- S3 input bucket
-- DynamoDB table with Streams enabled
-- S3 notification trigger for the preprocessing Lambda
-- DynamoDB Stream event mappings for downstream Lambdas
+Automated provisioning and wiring of AWS resources on LocalStack:
+1. Package and deploy Lambda stubs
+2. Create SSM parameters for resource names
+3. Create S3 input bucket
+4. Create DynamoDB table with Streams enabled
+5. Configure S3 → Preprocess Lambda notifications
+6. Configure DynamoDB Streams → downstream Lambdas
+7. Wait for readiness and print summary
 
 Usage:
-  export LOCALSTACK_ENDPOINT=http://localhost:4566
-  export AWS_REGION=us-east-1
   python scripts/setup_resources.py
 
-Requires:
-  boto3
+Ensure Python venv is activated and requirements installed.
 """
 import os
 import sys
 import time
+import zipfile
+from pathlib import Path
 import boto3
 import botocore
 
-# Read LocalStack endpoint and AWS region from environment (with defaults)
+# Configuration
 ENDPOINT_URL = os.getenv("LOCALSTACK_ENDPOINT", "http://localhost:4566")
-REGION = os.getenv("AWS_REGION", "us-east-1")
-
-# Resource definitions and names
+REGION       = os.getenv("AWS_REGION", "us-east-1")
 RESOURCE_CONFIG = {
-    # The S3 bucket to upload raw review files
     "s3_input_bucket": "reviews-input",
-
-    # DynamoDB table to store processed reviews and counters
-    "dynamodb_table": "reviews",
-
-    # SSM parameters mapping for dynamic configuration
+    "dynamodb_table":  "reviews",
     "ssm_parameters": {
         "/app/buckets/input": "reviews-input",
         "/app/tables/reviews": "reviews"
     },
-
-    # Lambda function names to wire up as event targets
-    "lambdas": {
-        "preprocess": "preprocess",
-        "profanity":  "profanity_check",
-        "sentiment": "sentiment_analysis",
-        "banning":   "banning_logic"
-    }
+    "lambdas": [
+        "preprocess",
+        "profanity_check",
+        "sentiment_analysis",
+        "banning_logic"
+    ]
 }
 
-# Utility to create a boto3 client pointed at LocalStack
+# AWS client factory
 def get_client(service_name):
     return boto3.client(
         service_name,
@@ -60,16 +52,65 @@ def get_client(service_name):
         aws_secret_access_key="test"
     )
 
-# Initialize clients
-s3_client       = get_client("s3")
-ddb_client      = get_client("dynamodb")
-ssm_client      = get_client("ssm")
-lambda_client   = get_client("lambda")
+s3_client     = get_client("s3")
+ddb_client    = get_client("dynamodb")
+ssm_client    = get_client("ssm")
+lambda_client = get_client("lambda")
 
+# Section: Lambda packaging and deployment
+
+def package_lambda(fn_name):
+    folder = Path("lambdas") / fn_name
+    src    = folder / "handler.py"
+    zipf   = folder / "lambda.zip"
+    print(f"Packaging Lambda: {fn_name}")
+    with zipfile.ZipFile(zipf, 'w') as z:
+        z.write(src, arcname='handler.py')
+    return str(zipf)
+
+
+def deploy_lambda(fn_name, zip_path):
+    print(f"Deploying Lambda: {fn_name}")
+    try:
+        lambda_client.create_function(
+            FunctionName=fn_name,
+            Runtime="python3.11",
+            Role="arn:aws:iam::000000000000:role/lambda-role",
+            Handler="handler.handler",
+            Code={"ZipFile": open(zip_path, 'rb').read()},
+            Timeout=3,
+            Environment={"Variables": {"STAGE": "local"}}
+        )
+    except botocore.exceptions.ClientError as e:
+        code = e.response.get('Error', {}).get('Code')
+        if code == 'ResourceConflictException':
+            lambda_client.update_function_code(
+                FunctionName=fn_name,
+                ZipFile=open(zip_path, 'rb').read()
+            )
+        else:
+            raise
+    # Poll until active
+    for _ in range(20):
+        resp = lambda_client.get_function(FunctionName=fn_name)
+        status = resp['Configuration'].get('State', 'Pending')
+        if status == 'Active':
+            break
+        time.sleep(1)
+    else:
+        print(f"WARNING: {fn_name} did not become Active in time.")
+
+
+def deploy_all_lambdas():
+    for name in RESOURCE_CONFIG['lambdas']:
+        zip_path = package_lambda(name)
+        deploy_lambda(name, zip_path)
+    print("All Lambdas deployed.")
+
+# Section: SSM parameters
 
 def create_ssm_parameters():
-    """Create or overwrite SSM parameters for resource names."""
-    for name, value in RESOURCE_CONFIG["ssm_parameters"].items():
+    for name, value in RESOURCE_CONFIG['ssm_parameters'].items():
         print(f"Putting SSM parameter {name} = {value}")
         ssm_client.put_parameter(
             Name=name,
@@ -78,107 +119,83 @@ def create_ssm_parameters():
             Overwrite=True
         )
 
+# Section: S3 bucket creation
 
 def create_s3_bucket(bucket_name):
-    """Create an S3 bucket if it does not already exist."""
     try:
         print(f"Creating bucket: {bucket_name}")
         s3_client.create_bucket(Bucket=bucket_name)
     except botocore.exceptions.ClientError as e:
-        code = e.response.get("Error", {}).get("Code")
-        if code in ("BucketAlreadyOwnedByYou", "BucketAlreadyExists"):
-            print(f"Bucket {bucket_name} already exists, skipping.")
+        code = e.response.get('Error', {}).get('Code')
+        if code in ('BucketAlreadyOwnedByYou', 'BucketAlreadyExists'):
+            print(f"Bucket {bucket_name} exists, skipping.")
         else:
             raise
+    # Confirm bucket exists
+    buckets = [b['Name'] for b in s3_client.list_buckets().get('Buckets', [])]
+    if bucket_name not in buckets:
+        print(f"ERROR: Bucket {bucket_name} not found after creation.")
 
+# Section: DynamoDB table creation with Streams
 
 def create_dynamodb_table(table_name):
-    """Create a DynamoDB table with stream enabled, return its stream ARN."""
     try:
         print(f"Creating DynamoDB table: {table_name}")
         ddb_client.create_table(
             TableName=table_name,
-            KeySchema=[{"AttributeName": "reviewId", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "reviewId", "AttributeType": "S"}],
-            BillingMode="PAY_PER_REQUEST",
-            StreamSpecification={"StreamEnabled": True, "StreamViewType": "NEW_AND_OLD_IMAGES"}
+            KeySchema=[{'AttributeName':'reviewId','KeyType':'HASH'}],
+            AttributeDefinitions=[{'AttributeName':'reviewId','AttributeType':'S'}],
+            BillingMode='PAY_PER_REQUEST',
+            StreamSpecification={'StreamEnabled':True,'StreamViewType':'NEW_AND_OLD_IMAGES'}
         )
-        # Wait until active
-        waiter = ddb_client.get_waiter('table_exists')
-        waiter.wait(TableName=table_name)
     except botocore.exceptions.ClientError as e:
-        code = e.response.get("Error", {}).get("Code")
-        if code == 'ResourceInUseException':
-            print(f"Table {table_name} already exists, skipping creation.")
+        if e.response['Error']['Code'] == 'ResourceInUseException':
+            print(f"Table {table_name} exists, skipping.")
         else:
             raise
-    # Retrieve the stream ARN
+    waiter = ddb_client.get_waiter('table_exists')
+    waiter.wait(TableName=table_name)
     desc = ddb_client.describe_table(TableName=table_name)
     stream_arn = desc['Table']['LatestStreamArn']
     print(f"DynamoDB Stream ARN: {stream_arn}")
     return stream_arn
 
+# Section: S3 notification configuration
 
 def create_s3_notification(bucket_name, lambda_name):
-    """Configure S3 bucket notification to invoke a Lambda on object creation."""
-    # Retrieve Lambda ARN
     resp = lambda_client.get_function(FunctionName=lambda_name)
     lambda_arn = resp['Configuration']['FunctionArn']
-    config = {
-        'LambdaFunctionConfigurations': [
-            {
-                'LambdaFunctionArn': lambda_arn,
-                'Events': ['s3:ObjectCreated:*']
-            }
-        ]
-    }
+    config = {'LambdaFunctionConfigurations':[{'LambdaFunctionArn':lambda_arn,'Events':['s3:ObjectCreated:*']}]}  # verify this event list
     print(f"Configuring S3 notifications on {bucket_name} -> {lambda_name}")
-    s3_client.put_bucket_notification_configuration(
-        Bucket=bucket_name,
-        NotificationConfiguration=config
-    )
+    s3_client.put_bucket_notification_configuration(Bucket=bucket_name,NotificationConfiguration=config)
 
+# Section: DynamoDB Stream → Lambda mapping
 
 def create_dynamodb_event_mapping(stream_arn, function_name):
-    """Map a DynamoDB stream to a Lambda function."""
-    # Check for existing mapping
-    existing = lambda_client.list_event_source_mappings(
-        EventSourceArn=stream_arn,
-        FunctionName=function_name
-    ).get('EventSourceMappings', [])
-    if existing:
-        print(f"Event source mapping for {function_name} already exists, skipping.")
+    mappings = lambda_client.list_event_source_mappings(EventSourceArn=stream_arn,FunctionName=function_name).get('EventSourceMappings', [])
+    if mappings:
+        print(f"Mapping for {function_name} exists, skipping.")
         return
-    # Create mapping
-    resp = lambda_client.create_event_source_mapping(
-        EventSourceArn=stream_arn,
-        FunctionName=function_name,
-        StartingPosition='TRIM_HORIZON'
-    )
-    print(f"Created event mapping: {resp['UUID']} for {function_name}")
+    resp = lambda_client.create_event_source_mapping(EventSourceArn=stream_arn,FunctionName=function_name,StartingPosition='TRIM_HORIZON',BatchSize=1)
+    uuid = resp['UUID']
+    # Poll mapping state
+    for _ in range(20):
+        m = lambda_client.get_event_source_mapping(UUID=uuid)
+        if m['State'] == 'Enabled': break
+        time.sleep(1)
+    print(f"Created mapping {uuid} -> {function_name}")
 
+# Section: Main orchestration
 
 def main():
-    print("▶️  setup_resources.py starting…")
-    # 1. SSM parameters
+    deploy_all_lambdas()
     create_ssm_parameters()
-    # 2. S3 input bucket
     create_s3_bucket(RESOURCE_CONFIG['s3_input_bucket'])
-    # 3. DynamoDB table and stream
     stream_arn = create_dynamodb_table(RESOURCE_CONFIG['dynamodb_table'])
-    # 4. S3 -> Preprocess Lambda
-    create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], RESOURCE_CONFIG['lambdas']['preprocess'])
-    # 5. DynamoDB stream -> downstream Lambdas
-    for key in ('profanity', 'sentiment', 'banning'):
-        create_dynamodb_event_mapping(stream_arn, RESOURCE_CONFIG['lambdas'][key])
-    print("Resource setup complete.")
-
+    create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
+    for fn in ['profanity_check','sentiment_analysis','banning_logic']:
+        create_dynamodb_event_mapping(stream_arn, fn)
+    print("Resource setup complete. Verify with awslocal s3 ls, dynamodb scan, lambda list-functions, etc.")
 
 if __name__ == '__main__':
     main()
-
-# -----------------------------------------------------------------------------
-# .env file (create at project root)
-# -----------------------------------------------------------------------------
-# LOCALSTACK_ENDPOINT=http://localhost:4566
-# AWS_REGION=us-east-1
