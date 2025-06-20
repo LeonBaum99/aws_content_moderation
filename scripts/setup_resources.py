@@ -32,7 +32,8 @@ RESOURCE_CONFIG = {
     "dynamodb_table":  "reviews",
     "ssm_parameters": {
         "/app/buckets/input": "reviews-input",
-        "/app/tables/reviews": "reviews"
+        "/app/tables/reviews": "reviews",
+        "/app/tables/users": "users" 
     },
     "lambdas": [
         "preprocess",
@@ -61,11 +62,12 @@ lambda_client = get_client("lambda")
 
 def package_lambda(fn_name):
     folder = Path("lambdas") / fn_name
-    src    = folder / "handler.py"
     zipf   = folder / "lambda.zip"
     print(f"Packaging Lambda: {fn_name}")
     with zipfile.ZipFile(zipf, 'w') as z:
-        z.write(src, arcname='handler.py')
+        # Add all .py files in the folder (handler.py, user_ops.py, etc.)
+        for py_file in folder.glob("*.py"):
+            z.write(py_file, arcname=py_file.name)
     return str(zipf)
 
 
@@ -138,16 +140,21 @@ def create_s3_bucket(bucket_name):
 
 # Section: DynamoDB table creation with Streams
 
-def create_dynamodb_table(table_name):
+def create_dynamodb_table(table_name, key_name, stream_enabled=False, stream_view_type="NEW_AND_OLD_IMAGES"):
+    kwargs = {
+        "TableName": table_name,
+        "KeySchema": [{'AttributeName': key_name, 'KeyType': 'HASH'}],
+        "AttributeDefinitions": [{'AttributeName': key_name, 'AttributeType': 'S'}],
+        "BillingMode": 'PAY_PER_REQUEST'
+    }
+    if stream_enabled:
+        kwargs["StreamSpecification"] = {
+            "StreamEnabled": True,
+            "StreamViewType": stream_view_type
+        }
     try:
         print(f"Creating DynamoDB table: {table_name}")
-        ddb_client.create_table(
-            TableName=table_name,
-            KeySchema=[{'AttributeName':'reviewId','KeyType':'HASH'}],
-            AttributeDefinitions=[{'AttributeName':'reviewId','AttributeType':'S'}],
-            BillingMode='PAY_PER_REQUEST',
-            StreamSpecification={'StreamEnabled':True,'StreamViewType':'NEW_AND_OLD_IMAGES'}
-        )
+        ddb_client.create_table(**kwargs)
     except botocore.exceptions.ClientError as e:
         if e.response['Error']['Code'] == 'ResourceInUseException':
             print(f"Table {table_name} exists, skipping.")
@@ -155,10 +162,12 @@ def create_dynamodb_table(table_name):
             raise
     waiter = ddb_client.get_waiter('table_exists')
     waiter.wait(TableName=table_name)
-    desc = ddb_client.describe_table(TableName=table_name)
-    stream_arn = desc['Table']['LatestStreamArn']
-    print(f"DynamoDB Stream ARN: {stream_arn}")
-    return stream_arn
+    print(f"Table {table_name} is ready.")
+    # Return stream ARN only if created with stream enabled
+    if stream_enabled:
+        desc = ddb_client.describe_table(TableName=table_name)
+        return desc['Table']['LatestStreamArn']
+    return None
 
 # Section: S3 notification configuration
 
@@ -191,11 +200,29 @@ def main():
     deploy_all_lambdas()
     create_ssm_parameters()
     create_s3_bucket(RESOURCE_CONFIG['s3_input_bucket'])
-    stream_arn = create_dynamodb_table(RESOURCE_CONFIG['dynamodb_table'])
+
+    # Use SSM values for table names
+    reviews_table_name = RESOURCE_CONFIG['ssm_parameters']['/app/tables/reviews']
+    users_table_name   = RESOURCE_CONFIG['ssm_parameters']['/app/tables/users']
+
+    # Create reviews table (with streams)
+    stream_arn = create_dynamodb_table(
+        table_name=reviews_table_name,
+        key_name="reviewId",
+        stream_enabled=True
+    )
+    # Create users table (no streams)
+    create_dynamodb_table(
+        table_name=users_table_name,
+        key_name="userId",
+        stream_enabled=False
+    )
+
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
     for fn in ['profanity_check','sentiment_analysis','banning_logic']:
         create_dynamodb_event_mapping(stream_arn, fn)
     print("Resource setup complete. Verify with awslocal s3 ls, dynamodb scan, lambda list-functions, etc.")
+
 
 if __name__ == '__main__':
     main()

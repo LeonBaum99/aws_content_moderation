@@ -2,6 +2,7 @@ import os
 import json
 import boto3
 from decimal import Decimal
+from user_ops import upsert_user_review_count
 
 # Configure LocalStack endpoint and region from environment.
 host = os.getenv("LOCALSTACK_HOSTNAME", "localhost")
@@ -68,5 +69,7 @@ def handler(event: dict, context) -> dict:
     }
     table.put_item(Item=item)
     print(f"Wrote stub item to DynamoDB: {item}")
+
+    upsert_user_review_count(json_content)
 
     return {"status": "ok"}
