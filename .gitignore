@@ -40,3 +40,6 @@ localstack_tmp/
 # Tutorial Lambda artifacts
 assignment_3_assets/tutorial/lambdas/*/lambda.zip
 assignment_3_assets/tutorial/lambdas/*/package/
+
+# Data
+/devset_data/
