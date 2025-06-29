@@ -19,7 +19,7 @@ ssm = boto3.client(
     aws_secret_access_key="test"
 )
 
-TABLE_NAME = ssm.get_parameter(Name="/app/tables/reviews")["Parameter"]["Value"]
+TABLE_NAME = ssm.get_parameter(Name="/app/tables/sentiment")["Parameter"]["Value"]
 
 
 
@@ -41,6 +41,10 @@ def handler(event, context):
     try: 
         print("SentimentAnalysis STUB EVENT:", event)
 
+        event_name = event['Records'][0]['eventName']
+
+        if event_name != "INSERT":
+            return {"status": "skipped"}
         new_image = event['Records'][0]['dynamodb']['NewImage']
                 
         review_id = new_image['reviewId']['S']
