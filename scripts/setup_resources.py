@@ -231,6 +231,7 @@ def main():
     # Create sentiment table (no streams)
     create_dynamodb_table(
         table_name = sentiment_table_name,
+        key_name="reviewId",
         stream_enabled=False)
     
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
