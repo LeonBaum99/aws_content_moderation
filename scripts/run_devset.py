@@ -42,7 +42,11 @@ def main():
         print(f"\rUploading {idx}/{total} ({idx/total:.1%})", end='', flush=True)
 
         try:
-            subprocess.run(cmd, check=True)
+            if os.name == "nt":
+                subprocess.run(" ".join(cmd), check=True, shell = True)
+            else:
+                subprocess.run(cmd, check=True)
+
         except subprocess.CalledProcessError as e:
             # Log error and continue
             print(f"\nError uploading {fname}: {e}")

@@ -32,6 +32,7 @@ mypy-boto3-sns==1.38.0
 mypy-boto3-ssm==1.38.5
 mypy_extensions==1.1.0
 packaging==25.0
+pandas==2.3.0
 pathspec==0.12.1
 Pillow==10.0.0
 platformdirs==4.3.8
