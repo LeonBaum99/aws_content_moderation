@@ -40,9 +40,13 @@ def handler(event, context):
         content = new_image['content']['M']
         review_text = content['reviewText']['S']
         
-        # overall und summary sollen auch mit rein NICHT VERGESSEN!!!!!
+        overall = content['overall']['N'] # This is a score from 1-5
 
-        scores = analyzer.polarity_scores(review_text)
+        summary = content['summary']['S'] # Summary of the Text
+        
+        text_to_analyze = review_text + '' + summary
+
+        scores = analyzer.polarity_scores(text_to_analyze)
         compound = scores["compound"]
         
         if compound >=  0.05:
@@ -51,24 +55,48 @@ def handler(event, context):
             sentiment = "NEGATIVE"
         else:
             sentiment = "NEUTRAL"
-        
-        print("-------------------------------------")
-        print("Our sentiment: ", sentiment)
 
+
+        overall = float(overall)
+        # Combine the "overall" and the sentiment of the review
+        if overall is None:
+            final_sentiment = sentiment  # fallback
+        else:
+            if sentiment == "NEUTRAL":
+                if overall >= 4.0:
+                    final_sentiment = "POSITIVE"
+                elif overall <= 2.0:
+                    final_sentiment = "NEGATIVE"
+                else:
+                    final_sentiment = "NEUTRAL"
+            elif sentiment == "POSITIVE":
+                if overall <= 2.0:
+                    final_sentiment = "NEUTRAL"  # contradiction
+                else:
+                    final_sentiment = "POSITIVE"
+            elif sentiment == "NEGATIVE":
+                if overall >= 4.0:
+                    final_sentiment = "NEUTRAL"  # contradiction
+                else:
+                    final_sentiment = "NEGATIVE"
+            else:
+                final_sentiment = sentiment  # fallback
+        
+    
         item = {
             'reviewId': review_id,
-            'sentiment': sentiment
+            'sentiment': final_sentiment
         }
-
-
-        print("the item to upload: ", item)
         
         table.put_item(Item=item)
+
+        print("Sentiment from Text:", sentiment)
+        print("score from rating", overall)
         
         
     except Exception as e:
         print("ERROR processing event:", event)
         print("Exception:", e)
-        raise e  # wichtig, damit LocalStack korrekt reagiert
+        raise e 
 
     return {"status": "ok"}
