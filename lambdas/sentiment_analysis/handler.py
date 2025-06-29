@@ -27,7 +27,6 @@ table = ddb.Table(TABLE_NAME)
 analyzer = SentimentIntensityAnalyzer()
 
 
-
 def handler(event, context):
 
     try: 
@@ -37,16 +36,14 @@ def handler(event, context):
                 
         review_id = new_image['reviewId']['S']
                 
-        content = new_image['content']['M']
-        review_text = content['reviewText']['S']
+        review_text = new_image['content']['S']
         
-        overall = content['overall']['N'] # This is a score from 1-5
-
-        summary = content['summary']['S'] # Summary of the Text
         
-        text_to_analyze = review_text + '' + summary
+        overall = new_image['overall']['N'] # This is a score from 1-5
 
-        scores = analyzer.polarity_scores(text_to_analyze)
+        overall = float(overall)
+
+        scores = analyzer.polarity_scores(review_text)
         compound = scores["compound"]
         
         if compound >=  0.05:

@@ -35,18 +35,7 @@ reviews_tbl = ddb.Table(REVIEWS_TABLE)
 # Initialize the profanity detector once per Lambda container.
 pf = ProfanityFilter()
 
-# ──────────────────────────────────────────────────────────────
-# Helper
-# ──────────────────────────────────────────────────────────────
-def extract_text(new_img: dict) -> str:
-    """
-    Build a single text string from summary and reviewText fields.
-    Falls back gracefully if one is missing.
-    """
-    content = new_img["content"]["M"]
-    summary = content.get("summary", {}).get("S", "")
-    review  = content.get("reviewText", {}).get("S", "")
-    return f"{summary} {review}".strip()
+
 
 # ──────────────────────────────────────────────────────────────
 # Lambda entrypoint
@@ -58,18 +47,23 @@ def handler(event: dict, context) -> dict:
     """
     try:
 
-        record      = event["Records"][0]
-        event_name  = record["eventName"]
+        new_image = event['Records'][0]['dynamodb']['NewImage']
+                
+        review_id = new_image['reviewId']['S']
+                
+        review_text = new_image['content']['S']
+
+        reviewer_id = new_image['reviewerId']['S']
+
+        event_name = event['Records'][0]['eventName']
+        
 
         # Ignore MODIFY/REMOVE events
         if event_name != "INSERT":
             return {"status": "skipped"}
 
-        new_img     = event["Records"][0]["dynamodb"]["NewImage"]
-        review_id   = new_img["reviewId"]["S"]
-        reviewer_id = new_img["content"]["M"]["reviewerID"]["S"]
-        text        = extract_text(new_img)
-        is_unpolite = pf.is_profane(text)
+
+        is_unpolite = pf.is_profane(review_text)
         print(f"[profanity_check] reviewId={review_id}  is_unpolite={is_unpolite}")
 
         reviews_tbl.update_item(
@@ -79,7 +73,7 @@ def handler(event: dict, context) -> dict:
         )
 
         if is_unpolite:
-            register_profanity(reviewer_id, threshold=3)
+            register_profanity(reviewer_id, threshold=4)
 
     except Exception as e:
         print("ERROR in profanity_check handler")
