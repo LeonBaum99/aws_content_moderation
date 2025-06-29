@@ -23,6 +23,8 @@ import zipfile
 from pathlib import Path
 import boto3
 import botocore
+import shutil
+import subprocess
 
 # Configuration
 ENDPOINT_URL = os.getenv("LOCALSTACK_ENDPOINT", "http://localhost:4566")
@@ -30,10 +32,12 @@ REGION       = os.getenv("AWS_REGION", "us-east-1")
 RESOURCE_CONFIG = {
     "s3_input_bucket": "reviews-input",
     "dynamodb_table":  "reviews",
+    "sentiment_table": "sentiment", # added config for sentiment table
     "ssm_parameters": {
         "/app/buckets/input": "reviews-input",
         "/app/tables/reviews": "reviews",
-        "/app/tables/users": "users" 
+        "/app/tables/users": "users" ,
+        "/app/tables/sentiment": "sentiment"
     },
     "lambdas": [
         "preprocess",
@@ -209,6 +213,7 @@ def main():
     # Use SSM values for table names
     reviews_table_name = RESOURCE_CONFIG['ssm_parameters']['/app/tables/reviews']
     users_table_name   = RESOURCE_CONFIG['ssm_parameters']['/app/tables/users']
+    sentiment_table_name = RESOURCE_CONFIG['ssm_parameters']['/app/tables/sentiment']
 
     # Create reviews table (with streams)
     stream_arn = create_dynamodb_table(
@@ -223,6 +228,11 @@ def main():
         stream_enabled=False
     )
 
+    # Create sentiment table (no streams)
+    create_dynamodb_table(
+        table_name = sentiment_table_name,
+        stream_enabled=False)
+    
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
     for fn in ['profanity_check','sentiment_analysis','banning_logic']:
         create_dynamodb_event_mapping(stream_arn, fn)
