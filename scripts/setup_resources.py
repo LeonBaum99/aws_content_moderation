@@ -23,6 +23,8 @@ import zipfile
 from pathlib import Path
 import boto3
 import botocore
+import shutil
+import subprocess
 
 # Configuration
 ENDPOINT_URL = os.getenv("LOCALSTACK_ENDPOINT", "http://localhost:4566")
@@ -30,6 +32,7 @@ REGION       = os.getenv("AWS_REGION", "us-east-1")
 RESOURCE_CONFIG = {
     "s3_input_bucket": "reviews-input",
     "dynamodb_table":  "reviews",
+    "sentiment_table": "sentiment", # added config for sentiment table
     "ssm_parameters": {
         "/app/buckets/input": "reviews-input",
         "/app/tables/reviews": "reviews"
@@ -59,14 +62,20 @@ lambda_client = get_client("lambda")
 
 # Section: Lambda packaging and deployment
 
-def package_lambda(fn_name):
+def package_lambda(fn_name: str):
     folder = Path("lambdas") / fn_name
-    src    = folder / "handler.py"
-    zipf   = folder / "lambda.zip"
-    print(f"Packaging Lambda: {fn_name}")
-    with zipfile.ZipFile(zipf, 'w') as z:
-        z.write(src, arcname='handler.py')
-    return str(zipf)
+
+    zipf_path = folder / "lambda.zip"
+    if zipf_path.exists():
+        zipf_path.unlink()
+
+    with zipfile.ZipFile(zipf_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for file in folder.rglob("*"):
+            if file.is_dir() or file == zipf_path or file.name == ".DS_Store":
+                continue
+            z.write(file, arcname=file.relative_to(folder))
+
+    return str(zipf_path)
 
 
 def deploy_lambda(fn_name, zip_path):
@@ -192,6 +201,8 @@ def main():
     create_ssm_parameters()
     create_s3_bucket(RESOURCE_CONFIG['s3_input_bucket'])
     stream_arn = create_dynamodb_table(RESOURCE_CONFIG['dynamodb_table'])
+    # create sentiment table
+    create_dynamodb_table(RESOURCE_CONFIG['sentiment_table'])
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
     for fn in ['profanity_check','sentiment_analysis','banning_logic']:
         create_dynamodb_event_mapping(stream_arn, fn)
