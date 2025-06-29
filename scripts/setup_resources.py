@@ -60,15 +60,20 @@ lambda_client = get_client("lambda")
 
 # Section: Lambda packaging and deployment
 
-def package_lambda(fn_name):
+def package_lambda(fn_name: str):
     folder = Path("lambdas") / fn_name
-    zipf   = folder / "lambda.zip"
-    print(f"Packaging Lambda: {fn_name}")
-    with zipfile.ZipFile(zipf, 'w') as z:
-        # Add all .py files in the folder (handler.py, user_ops.py, etc.)
-        for py_file in folder.glob("*.py"):
-            z.write(py_file, arcname=py_file.name)
-    return str(zipf)
+
+    zipf_path = folder / "lambda.zip"
+    if zipf_path.exists():
+        zipf_path.unlink()
+
+    with zipfile.ZipFile(zipf_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for file in folder.rglob("*"):
+            if file.is_dir() or file == zipf_path or file.name == ".DS_Store":
+                continue
+            z.write(file, arcname=file.relative_to(folder))
+
+    return str(zipf_path)
 
 
 def deploy_lambda(fn_name, zip_path):
