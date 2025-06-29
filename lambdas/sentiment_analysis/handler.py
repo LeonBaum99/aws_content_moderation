@@ -11,8 +11,17 @@ port = os.getenv("EDGE_PORT", "4566")
 ENDPOINT = f"http://{host}:{port}"
 REGION = os.getenv("AWS_REGION", "us-east-1")
 
-# DynamoDB table name (stub uses a fixed name; real code will read from SSM)
-TABLE_NAME = "sentiment"
+ssm = boto3.client(
+    "ssm",
+    endpoint_url=ENDPOINT,
+    region_name=REGION,
+    aws_access_key_id="test",
+    aws_secret_access_key="test"
+)
+
+TABLE_NAME = ssm.get_parameter(Name="/app/tables/reviews")["Parameter"]["Value"]
+
+
 
 # Initialize DynamoDB resource
 ddb = boto3.resource(
