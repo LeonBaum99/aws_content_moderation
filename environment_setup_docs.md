@@ -12,18 +12,38 @@ This document guides you from a fresh clone to a fully wired, stubbed serverless
    - **Git**
 
 2. **Clone and Prepare**
+   For Linux/MacOs:
    ```bash
    git clone <repo-url>
    cd <repo-folder>
-   python3.11 -m venv .venv
-   source .venv/bin/activate
+   python -m venv .venv
+   source .venv/bin/activate 
    pip install --upgrade pip
    pip install -r requirements.txt
    ```
 
+   For Windows (using PowerShell):
+   ```bash
+   git clone <repo-url>
+   cd <repo-folder>
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1 
+   python.exe -m pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+
 3. **Start LocalStack**
+
+   For Linux/MacOs:
    ```bash
    LOCALSTACK_ACTIVATE_PRO=0 LOCALSTACK_DEBUG=1 localstack start
+   ```
+
+   For Windows:
+   ```bash
+   $env:LOCALSTACK_ACTIVATE_PRO = "0"
+   $env:LOCALSTACK_DEBUG = "1"
+   localstack start
    ```
    Leave this terminal open; LocalStack will emulate AWS services on `localhost:4566`.
 
