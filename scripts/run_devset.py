@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import math
 
 def main():
     review_dir = "./devset_data"
@@ -21,6 +22,9 @@ def main():
         to_process = files[:default_count]
     elif arg == "all":
         to_process = files
+    elif arg == "10%":
+        count = math.ceil(len(files) * 0.1)
+        to_process = files[:count]
     else:
         try:
             count = int(arg)
