@@ -42,8 +42,7 @@ RESOURCE_CONFIG = {
     "lambdas": [
         "preprocess",
         "profanity_check",
-        "sentiment_analysis",
-        "banning_logic"
+        "sentiment_analysis"
     ]
 }
 
@@ -235,7 +234,7 @@ def main():
         stream_enabled=False)
     
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
-    for fn in ['profanity_check','sentiment_analysis','banning_logic']:
+    for fn in ['profanity_check','sentiment_analysis']:
         create_dynamodb_event_mapping(stream_arn, fn)
     print("Resource setup complete. Verify with awslocal s3 ls, dynamodb scan, lambda list-functions, etc.")
 
