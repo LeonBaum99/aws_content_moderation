@@ -67,6 +67,7 @@ def package_lambda(fn_name: str):
     folder = Path("lambdas") / fn_name
 
     zipf_path = folder / "lambda.zip"
+    
     if zipf_path.exists():
         zipf_path.unlink()
 
@@ -75,7 +76,7 @@ def package_lambda(fn_name: str):
             if file.is_dir() or file == zipf_path or file.name == ".DS_Store":
                 continue
             z.write(file, arcname=file.relative_to(folder))
-
+    
     return str(zipf_path)
 
 
