@@ -1,14 +1,14 @@
 """
-Comprehensive integration test for Assignment 3
+Integration test
 
 What we verify
 ──────────────
-1. A clearly positive review is stored with sentiment = "POSITIVE" and isUnpolite = False.
-2. A clearly negative review is stored with sentiment = "NEGATIVE" and isUnpolite = False.
-3. Four profane reviews from the **same** user:
-     • each review row has isUnpolite = True  
-     • users table increments unpoliteCount correctly  
-     • user is banned (banned = True) after the 4th offence (threshold = 4).
+- A clearly positive review is stored with sentiment = "POSITIVE" and isUnpolite = False
+- A clearly negative review is stored with sentiment = "NEGATIVE" and isUnpolite = False
+- Four profane reviews from the same user:
+     - each review row has isUnpolite = True  
+     - users table increments unpoliteCount correctly  
+     - user is banned (banned = True) after the 4th offence (threshold = 4)
 """
 
 import json
@@ -21,15 +21,12 @@ import pytest
 
 pytestmark = pytest.mark.integration   # run via:  pytest -m integration -v
 
-
-# ────────────────────────────────────────────────────────────────
 # Helpers
-# ────────────────────────────────────────────────────────────────
 def _make_review(reviewer_id: str,
                  text: str,
                  summary: str,
                  overall: float = 5.0) -> dict:
-    """Build the minimal review document the Lambda chain expects."""
+    """Build the minimal review document the lambdas expect."""
     return {
         "reviewerID":   reviewer_id,
         "asin":         "TESTASIN",
@@ -45,7 +42,7 @@ def _make_review(reviewer_id: str,
 
 
 def _dynamo_value(attr_map, key):
-    """Extract a Python scalar from a DynamoDB Low-Level Maps structure."""
+    """Extract a scalar from a dynamoDB maps structure."""
     if key not in attr_map:
         return None
     val = attr_map[key]
@@ -89,7 +86,7 @@ def _wait_for_sentiment(ddb, table, key, expected, timeout=60):
 
 
 def _wait_for_user(ddb, table, user_id, *, count, banned, timeout=60):
-    """Wait until the user row reaches the given unpoliteCount / banned state."""
+    """Wait until the user row reaches the given unpoliteCount or banned state."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         resp = ddb.get_item(TableName=table,
@@ -147,7 +144,7 @@ def test_pipeline_requirements(aws_clients, names):
     _wait_for_review(ddb, reviews_tbl, neg_key, expect_unpolite=False)
     _wait_for_sentiment(ddb, sentiment_tbl, neg_key, expected="NEGATIVE")
 
-    # 3-6 ─ Four profane reviews from the same user
+    # ─ Four profane reviews from the same user
     bad_user = "user_profane"
     for i in range(4):
         prof_review = _make_review(
