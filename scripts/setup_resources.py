@@ -71,7 +71,7 @@ def package_lambda(fn_name: str):
     if zipf_path.exists():
         zipf_path.unlink()
 
-    with zipfile.ZipFile(zipf_path, "w", zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(zipf_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for file in folder.rglob("*"):
             if file.is_dir() or file == zipf_path or file.name == ".DS_Store":
                 continue

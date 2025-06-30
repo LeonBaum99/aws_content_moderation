@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import math
 
 def main():
     review_dir = "./devset_data"
@@ -21,6 +22,9 @@ def main():
         to_process = files[:default_count]
     elif arg == "all":
         to_process = files
+    elif arg == "10%":
+        count = math.ceil(len(files) * 0.1)
+        to_process = files[:count]
     else:
         try:
             count = int(arg)
@@ -42,7 +46,11 @@ def main():
         print(f"\rUploading {idx}/{total} ({idx/total:.1%})", end='', flush=True)
 
         try:
-            subprocess.run(cmd, check=True)
+            if os.name == "nt":
+                subprocess.run(" ".join(cmd), check=True, shell = True)
+            else:
+                subprocess.run(cmd, check=True)
+
         except subprocess.CalledProcessError as e:
             # Log error and continue
             print(f"\nError uploading {fname}: {e}")
