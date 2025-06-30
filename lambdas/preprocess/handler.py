@@ -8,18 +8,19 @@ import pathlib
 
 import nltk
 
-# 1) Ordner 'nltk_data' relativ zu dieser Datei finden
+# Find folder 'nltk_data' via relative path
 ROOT = pathlib.Path(__file__).parent
 NLTK_DATA = ROOT / "nltk_data"
 STOP_FILE = ROOT / "stopwords.txt"
 
-# 2) Falls er existiert -> zu den nltk-Suchpfaden hinzufügen
+# If it exists -> add to the nltk paths
 if NLTK_DATA.exists():
     nltk.data.path.append(str(NLTK_DATA))
 
 if not STOP_FILE.exists():
     raise FileNotFoundError(f"stopwords file not found: {STOP_FILE}")
 
+# Read in the given stopwords.txt
 with STOP_FILE.open(encoding="utf-8") as fh:
     STOP_WORDS = {
         ln.strip().lower()

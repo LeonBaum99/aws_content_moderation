@@ -100,8 +100,7 @@ def handler(event, context):
         
         table.put_item(Item=item)
 
-        print("Sentiment from Text:", sentiment)
-        print("score from rating", overall)
+        
         
         
     except Exception as e:
