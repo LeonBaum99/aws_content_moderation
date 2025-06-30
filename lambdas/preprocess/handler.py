@@ -51,6 +51,7 @@ ssm = boto3.client(
     aws_access_key_id="test",
     aws_secret_access_key="test"
 )
+
 try:
     TABLE_NAME = ssm.get_parameter(Name="/app/tables/reviews")["Parameter"]["Value"]
 except Exception as e:
@@ -65,8 +66,10 @@ ddb = boto3.resource(
     aws_access_key_id="test",
     aws_secret_access_key="test"
 )
+
 table = ddb.Table(TABLE_NAME)
 
+# Establish s3 connection
 s3 = boto3.client(
     "s3",
     endpoint_url=ENDPOINT,
@@ -94,12 +97,14 @@ def handler(event: dict, context) -> dict:
     # Parse review content as JSON.
     json_content = json.loads(content.decode("utf-8"), parse_float=Decimal)
 
-
+    # Extract reviewerId and register the review
     reviewer_id = json_content.get("reviewerID")
     register_review(reviewer_id)
 
 
     # Preprocessing code 
+
+    # Extract the relevant parts 
     reviewText = json_content.get("reviewText")
     summary = json_content.get("summary")
     overall = json_content.get("overall")
@@ -121,6 +126,7 @@ def handler(event: dict, context) -> dict:
         lemmas = [LEMMATISER.lemmatize(t) for t in tokens]           # step 4
         return " ".join(lemmas)
     
+    # Preprocess the texts, combine and save
     preprocessed = preprocess(summary, reviewText)
 
 

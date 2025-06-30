@@ -3,6 +3,8 @@ import sys
 import subprocess
 import math
 
+# With this script we go through all single reviews from the devset_data folder
+
 def main():
     review_dir = "./devset_data"
     default_count = 9
@@ -22,8 +24,8 @@ def main():
         to_process = files[:default_count]
     elif arg == "all":
         to_process = files
-    elif arg == "10%":
-        count = math.ceil(len(files) * 0.1)
+    elif arg == "20%":
+        count = math.ceil(len(files) * 0.2)
         to_process = files[:count]
     else:
         try:

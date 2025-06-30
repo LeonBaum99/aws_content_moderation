@@ -13,6 +13,7 @@ port = os.getenv("EDGE_PORT", "4566")
 ENDPOINT = f"http://{host}:{port}"
 REGION   = os.getenv("AWS_REGION", "us-east-1")
 
+# Initialize SSM client and fetch the DynamoDB table name from Parameter Store.
 ssm = boto3.client(
     "ssm",
     endpoint_url=ENDPOINT,
@@ -23,6 +24,8 @@ ssm = boto3.client(
 
 REVIEWS_TABLE = ssm.get_parameter(Name="/app/tables/reviews")["Parameter"]["Value"]
 
+
+# DynamoDB connection setup
 ddb = boto3.resource(
     "dynamodb",
     endpoint_url=ENDPOINT,
@@ -46,7 +49,7 @@ def handler(event: dict, context) -> dict:
     the isUnpolite flag in the reviews table.
     """
     try:
-
+        # Extract the relevant information from the event
         new_image = event['Records'][0]['dynamodb']['NewImage']
                 
         review_id = new_image['reviewId']['S']
@@ -62,10 +65,11 @@ def handler(event: dict, context) -> dict:
         if event_name != "INSERT":
             return {"status": "skipped"}
 
-
+        # Execute profanity check for the review_text
         is_unpolite = pf.is_profane(review_text)
         print(f"[profanity_check] reviewId={review_id}  is_unpolite={is_unpolite}")
 
+        # Save the result in the DynamoDb
         reviews_tbl.update_item(
             Key={"reviewId": review_id},
             UpdateExpression="SET isUnpolite = :u",

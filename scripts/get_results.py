@@ -39,17 +39,28 @@ def _tableSentiment():
     )
     return ddb.Table(TABLE_NAME)
 
+# Read the data from the sentiment table
 tbl_sent = _tableSentiment()
 response_sent = tbl_sent.scan()
 items_sent = response_sent['Items']
+
+# Convert to pandas dataframe for easy evaluation
 df_sent = pd.DataFrame(items_sent)
+
+# Count the different sentiments 
 freq_table = df_sent['sentiment'].value_counts()
 for idx, val in freq_table.items():
     print(f"Number of {idx.lower()} reviews: {val}")
 
+
+# Read the data from the user table
 tbl_user = _tableUsers()
 response_user = tbl_user.scan()
 items_user = response_user['Items']
+
+# Convert to pandas dataframe for easy evaluation
 df_user = pd.DataFrame(items_user)
+
+# Sum up the reviews containing profanity and banned customers
 print(f"Number of reviews containing profanity: {df_user['unpoliteCount'].sum()}")
 print(f"Number of banned customers: {df_user['banned'].sum()}")

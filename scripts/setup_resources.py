@@ -68,9 +68,11 @@ def package_lambda(fn_name: str):
 
     zipf_path = folder / "lambda.zip"
     
+    # Exclude the lambda.zip so that we do not zip it again 
     if zipf_path.exists():
         zipf_path.unlink()
 
+    # Zip the rest 
     with zipfile.ZipFile(zipf_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for file in folder.rglob("*"):
             if file.is_dir() or file == zipf_path or file.name == ".DS_Store":
@@ -114,7 +116,9 @@ def deploy_lambda(fn_name, zip_path):
 
 def deploy_all_lambdas():
     for name in RESOURCE_CONFIG['lambdas']:
+        # Package all lambda code into the zip files
         zip_path = package_lambda(name)
+        # Deploy those zip files
         deploy_lambda(name, zip_path)
     print("All Lambdas deployed.")
 
@@ -234,6 +238,8 @@ def main():
         key_name="reviewId",
         stream_enabled=False)
     
+
+    # Create event notification from s3 bucket to preprocessing lambda
     create_s3_notification(RESOURCE_CONFIG['s3_input_bucket'], 'preprocess')
     for fn in ['profanity_check','sentiment_analysis']:
         create_dynamodb_event_mapping(stream_arn, fn)

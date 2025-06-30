@@ -1,6 +1,11 @@
 import os
 import json
 
+# With this script, we split up the devset into single json files per review 
+# in order to then be able to put each review seperatly into our pipeline
+# The single json files are saved in the "devset_data" folder
+
+
 input_file = './reviews_devset.json'
 output_dir = './devset_data'
 
