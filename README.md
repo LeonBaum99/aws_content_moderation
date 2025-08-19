@@ -14,8 +14,8 @@ For detailed instructions on how to run the application, see `run_instructions.p
 - Serverless, event-driven architecture for scalability and low operational overhead.
 
 ## Structure
-- `lambdas/` Lambda function source code (excluded in this repo text)
-  - `preprocess/` Preprocesses raw review data, store to DynamoDB.
+- `lambdas/` Lambda function source code
+  - `preprocess/` Preprocesses raw review data, store to DynamoDB
   - `profanity_check/` Checks for profane content, tracks offenders
   - `sentiment_analysis/` Classifies sentiment of reviews
 - `scripts/`
@@ -24,8 +24,8 @@ For detailed instructions on how to run the application, see `run_instructions.p
   - `run_devset.py` Batch-upload reviews for testing
   - `setup_resources.py` Provision AWS resources and deploy Lambdas 
 - `tests/`
-  - `conftest.py` # Pytest fixtures and LocalStack config
-  - `test_pipeline.py` # End-to-end pipeline integration tests
+  - `conftest.py` Pytest fixtures and LocalStack config
+  - `test_pipeline.py` End-to-end pipeline integration tests
 
 ## Notes
 - This repo is for local development and testing. For production deployment, proper IAM roles, security, monitoring and error handling must be added.
